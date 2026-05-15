@@ -10,9 +10,7 @@ RUN apt-get update && \
     apt-get install -y poppler-utils ghostscript dcraw exiftool locales gettext-base && rm -rf /var/lib/apt/lists/* \
     && localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
 
-# ARG REPO_BASE=https://packages.iconik.io/deb/ubuntu
-# development repository
-ARG REPO_BASE=https://packages.iconik.io/dev/deb/ubuntu
+ARG REPO_BASE=https://packages.iconik.io/deb/ubuntu
 
 RUN apt-get update && apt-get install -y wget gnupg && \
     wget -O - ${REPO_BASE}/dists/noble/iconik_package_repos_pub.asc | apt-key add - && \
