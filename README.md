@@ -82,7 +82,7 @@ docker compose logs -f isg-node-main
 
 ### How the cluster pieces fit together
 
-All ISG nodes - the one running in this compose file and any additional worker nodes you add later - connect to the same network database. That database is how ISG coordinates and distributes jobs across the cluster. The main node is responsible for polling events from iconik and for handling jobs that haven't yet been picked up by a worker.
+All ISG nodes - the one running in this compose file and any additional worker nodes you add later - connect to the same network database. That database is how ISG coordinates and distributes jobs across the cluster. The main node is responsible for polling events from iconik and for handling jobs that cannot scale.
 
 Worker nodes connect to the database using a standard postgres connection string (see https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING-URIS). Example:
 
