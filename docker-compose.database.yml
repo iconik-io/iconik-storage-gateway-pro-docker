@@ -1,7 +1,7 @@
 services:
   # PostgreSQL database for ISG Pro cluster
   postgres:
-    image: postgres:latest
+    image: postgres:18.4
     container_name: isg-postgres
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -21,7 +21,7 @@ services:
     restart: unless-stopped
   # pgBouncer connection pooler
   pgbouncer:
-    image: edoburu/pgbouncer:latest
+    image: edoburu/pgbouncer:v1.25.1-p0
     container_name: isg-pgbouncer
     depends_on:
       - postgres

@@ -16,6 +16,8 @@ Follow this README from top to bottom.
 - An iconik account with permission to administer ISG clusters.
 - Windows is currently not supported.
 
+The compose files pin specific image versions (`postgres:18.4`, `edoburu/pgbouncer:v1.25.1-p0`) so rebuilds stay deterministic. To upgrade postgres across major versions (e.g. 18 → 19), follow the official `pg_upgrade` procedure - bumping the tag alone will leave the new server unable to start against an old data volume.
+
 ## Security warnings
 
 - **Change all default values before running in production.** In particular, replace `POSTGRES_PASSWORD=my_password` from `.env.example` with a strong password.
