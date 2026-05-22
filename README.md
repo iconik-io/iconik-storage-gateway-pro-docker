@@ -20,8 +20,15 @@ The compose files pin specific image versions (`postgres:18.4`, `edoburu/pgbounc
 
 ## Security warnings
 
-- **Change all default values before running in production.** In particular, replace `POSTGRES_PASSWORD=my_password` from `.env.example` with a strong password.
+- **Change all default values before running in production.** In particular, replace both `POSTGRES_PASSWORD` (the postgres superuser, used only for init/admin) and `ISG_DB_PASSWORD` (the application user, used by every ISG node for runtime queries) from `.env.example` with strong passwords.
 - **Do not expose pgbouncer to the public internet without a firewall.** `PGBOUNCER_HOST=0.0.0.0` will publish it on every interface - only do that behind a firewall.
+
+### Database accounts
+
+Two distinct database accounts are used, with different roles:
+
+- **`postgres` (superuser, `POSTGRES_PASSWORD`)** - created automatically by the postgres image at first start. Used only by `init-db.sh` to create the application user.
+- **`ISG_DB_USER` (application user, `ISG_DB_PASSWORD`)** - created by `init-db.sh` and made the owner of `POSTGRES_DB` and its `public` schema.
 
 ## Create the ISG cluster in iconik
 
@@ -34,9 +41,11 @@ Copy the example:
 
 and populate `.env` with real values. Example:
 ```
-POSTGRES_PASSWORD=my_strong_password
-POSTGRES_USER=postgres
+POSTGRES_PASSWORD=my_strong_superuser_password
 POSTGRES_DB=isg_db
+
+ISG_DB_USER=isg
+ISG_DB_PASSWORD=my_strong_app_password
 
 PGBOUNCER_HOST=0.0.0.0
 PGBOUNCER_PORT=6432
@@ -50,7 +59,9 @@ ICONIK_STORAGE_GATEWAY_ID=05bf723c-272c-11f1-adfe-5aad1d0b1af7
 ```
 
 What each variable does:
-- `POSTGRES_*` - credentials for the embedded postgres database.
+- `POSTGRES_PASSWORD` - password for the `postgres` superuser. Used only by `init-db.sh` to bootstrap the application user.
+- `POSTGRES_DB` - name of the application database.
+- `ISG_DB_USER` / `ISG_DB_PASSWORD` - credentials for the dedicated application database user. This is the account every ISG node (and pgbouncer) uses for runtime queries.
 - `PGBOUNCER_HOST` / `PGBOUNCER_PORT` - host interface and port on which pgbouncer is published. This is the address other ISG cluster nodes (running elsewhere) connect to.
 - `NAS_STORAGE_PATH` - host path bind-mounted to `/mnt/storage` inside the ISG container; this is where iconik will read and write media files.
 - `ICONIK_*` - credentials and identifiers for the iconik tenant and the cluster you created in the step above.
@@ -88,7 +99,9 @@ All ISG nodes - the one running in this compose file and any additional worker n
 
 Worker nodes connect to the database using a standard postgres connection string (see https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING-URIS). Example:
 
-`postgres://postgres:my_strong_password@my_main_host:6432/isg_db`
+`postgres://isg:my_strong_app_password@my_main_host:6432/isg_db`
+
+Worker nodes should connect as the `ISG_DB_USER`.
 
 ## Docker compose (database only)
 

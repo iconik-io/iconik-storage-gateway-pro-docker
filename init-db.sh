@@ -1,13 +1,12 @@
 #!/bin/bash
 set -e
 
-psql -v ON_ERROR_STOP=1 --username "postgres" <<-EOSQL
-    GRANT ALL PRIVILEGES ON DATABASE ${POSTGRES_DB} TO ${POSTGRES_USER};
-EOSQL
-
-psql -v ON_ERROR_STOP=1 --username "postgres" --dbname "${POSTGRES_DB}" <<-EOSQL
-    GRANT ALL ON SCHEMA public TO ${POSTGRES_USER};
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${POSTGRES_USER};
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${POSTGRES_USER};
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO ${POSTGRES_USER};
+psql -v ON_ERROR_STOP=1 \
+     -v isg_user="${ISG_DB_USER}" \
+     -v isg_password="${ISG_DB_PASSWORD}" \
+     -v isg_db="${POSTGRES_DB}" \
+     --username "postgres" --dbname "${POSTGRES_DB}" <<-'EOSQL'
+    CREATE ROLE :"isg_user" WITH LOGIN PASSWORD :'isg_password';
+    ALTER DATABASE :"isg_db" OWNER TO :"isg_user";
+    ALTER SCHEMA public OWNER TO :"isg_user";
 EOSQL
