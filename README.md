@@ -30,6 +30,8 @@ Two distinct database accounts are used, with different roles:
 - **`postgres` (superuser, `POSTGRES_PASSWORD`)** - created automatically by the postgres image at first start. Used only by `init-db.sh` to create the application user.
 - **`ISG_DB_USER` (application user, `ISG_DB_PASSWORD`)** - created by `init-db.sh` and made the owner of `POSTGRES_DB` and its `public` schema.
 
+`init-db.sh` runs **only the first time** the postgres data volume is initialized. Changing `ISG_DB_USER` or `ISG_DB_PASSWORD` in `.env` after that and restarting will not update the database — postgres skips the init script when the data dir is non-empty. To apply a credential change, either run `ALTER ROLE` manually inside the postgres container, or destroy the volume and start fresh (see "Tear down and reset" below).
+
 ## Create the ISG cluster in iconik
 
 Before starting the containers, create an ISG cluster at https://app.iconik.io/admin/isg/ and note the main node id - you'll put that into `.env` as `ICONIK_STORAGE_GATEWAY_ID`.
@@ -82,7 +84,11 @@ Start the ISG cluster node together with the database and connection pooler:
 
 `docker compose --env-file .env up -d`
 
-The image is built automatically on first `up`. Rebuild only when the `Dockerfile` itself changes - edits to `.env` or `config.ini.template` do not require a rebuild:
+The image is built automatically on first `up`. Edits to `.env` or `config.ini.template` do not require a rebuild — only changes to the `Dockerfile` do. A normal rebuild is:
+
+`docker compose build`
+
+Use `--no-cache` only when you need to force every layer to be re-fetched (for example, to pick up a new upstream package version):
 
 `docker compose build --no-cache`
 
@@ -99,9 +105,9 @@ All ISG nodes - the one running in this compose file and any additional worker n
 
 Worker nodes connect to the database using a standard postgres connection string (see https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING-URIS). Example:
 
-`postgres://isg:my_strong_app_password@my_main_host:6432/isg_db`
+`postgres://<ISG_DB_USER>:<ISG_DB_PASSWORD>@<main_host>:6432/<POSTGRES_DB>`
 
-Worker nodes should connect as the `ISG_DB_USER`.
+Substitute the values from your `.env`. Worker nodes should connect as the `ISG_DB_USER`, never as the postgres superuser.
 
 ## Docker compose (database only)
 
@@ -110,6 +116,20 @@ Worker nodes should connect as the `ISG_DB_USER`.
 Start the database and connection pooler:
 
 `docker compose --env-file .env -f docker-compose.database.yml up -d`
+
+## Tear down and reset
+
+Stop the stack but keep the postgres data and ISG logs:
+
+`docker compose --env-file .env down`
+
+Stop and remove **everything**, including the postgres data volume, the ISG data volume, and the ISG logs volume:
+
+`docker compose --env-file .env down -v`
+
+The `-v` flag is destructive: after this, the next `up` will reinitialize the database from scratch, which means `init-db.sh` will run again and pick up any changes to `ISG_DB_USER` / `ISG_DB_PASSWORD` in `.env`. Existing media on the bind-mounted `NAS_STORAGE_PATH` is untouched (bind mounts are not removed by `down -v`).
+
+For the database-only stack, use the same commands with `-f docker-compose.database.yml`.
 
 ## PgBouncer minimum requirements
 

@@ -16,6 +16,18 @@ fi
 : "${ICONIK_URL:=https://app.iconik.io/}"
 export ICONIK_URL ICONIK_APP_ID ICONIK_AUTH_TOKEN ICONIK_STORAGE_GATEWAY_ID
 
+missing=()
+for var in ICONIK_APP_ID ICONIK_AUTH_TOKEN ICONIK_STORAGE_GATEWAY_ID; do
+    if [ -z "${!var}" ]; then
+        missing+=("${var}")
+    fi
+done
+if [ ${#missing[@]} -gt 0 ]; then
+    echo "ERROR: required env vars not set: ${missing[*]}" >&2
+    echo "Set these in your .env file before starting the container." >&2
+    exit 1
+fi
+
 mkdir -p "${CONFIG_DIR}"
 envsubst < "${TEMPLATE_FILE}" > "${CONFIG_FILE}"
 
