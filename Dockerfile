@@ -4,7 +4,7 @@ LABEL maintainer="iconik Media AB <info@iconik.io>"
 
 # Prevent interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
-ENV LANG=en_US.utf8
+ENV LANG=en_US.UTF-8
 
 RUN apt-get update && \
     apt-get install -y poppler-utils ghostscript dcraw exiftool locales gettext-base && rm -rf /var/lib/apt/lists/* \
