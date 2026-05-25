@@ -8,5 +8,3 @@ storage-gateway-id = ${ICONIK_STORAGE_GATEWAY_ID}
 
 use-packaged-imagemagick = true
 use-packaged-ffmpeg = true
-
-log-filename = default.log.txt

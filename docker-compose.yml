@@ -40,7 +40,7 @@ services:
       - LISTEN_PORT=6432
       - LOG_CONNECTIONS=0
       - LOG_DISCONNECTIONS=0
-      - LOG_STATS=0
+      - LOG_STATS=1
     ports:
       - "${PGBOUNCER_HOST}:${PGBOUNCER_PORT}:6432"
     networks:
@@ -71,8 +71,6 @@ services:
     volumes:
       - ./config.ini.template:/config.ini.template:ro
       - ${NAS_STORAGE_PATH}:/mnt/storage
-      - isg_node_main_data:/var/iconik/iconik_storage_gateway/data
-      - isg_node_main_logs:/var/log/iconik/iconik_storage_gateway
 
 networks:
   isg-network:
@@ -80,5 +78,3 @@ networks:
 
 volumes:
   postgres_data:
-  isg_node_main_data:
-  isg_node_main_logs:

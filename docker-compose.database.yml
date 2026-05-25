@@ -40,7 +40,7 @@ services:
       - LISTEN_PORT=6432
       - LOG_CONNECTIONS=0
       - LOG_DISCONNECTIONS=0
-      - LOG_STATS=0
+      - LOG_STATS=1
     ports:
       - "${PGBOUNCER_HOST}:${PGBOUNCER_PORT}:6432"
     networks:
