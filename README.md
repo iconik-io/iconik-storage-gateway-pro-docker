@@ -123,7 +123,7 @@ Stop the stack but keep the postgres data and ISG logs:
 
 `docker compose --env-file .env down`
 
-Stop and remove **everything**, including the postgres data volume, the ISG data volume, and the ISG logs volume:
+Stop and remove **everything**, including the postgres data volume:
 
 `docker compose --env-file .env down -v`
 
