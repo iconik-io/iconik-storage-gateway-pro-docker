@@ -1,0 +1,80 @@
+services:
+  # PostgreSQL database for ISG Pro cluster
+  postgres:
+    image: postgres:18.4
+    container_name: isg-postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      ISG_DB_USER: ${ISG_DB_USER}
+      ISG_DB_PASSWORD: ${ISG_DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    networks:
+      - isg-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  # pgBouncer connection pooler
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.1-p0
+    container_name: isg-pgbouncer
+    depends_on:
+      - postgres
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${ISG_DB_USER}
+      - DB_PASSWORD=${ISG_DB_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
+      - POOL_MODE=transaction
+      - DEFAULT_POOL_SIZE=50
+      - MAX_CLIENT_CONN=1000
+      - ADMIN_USERS=
+      - AUTH_TYPE=scram-sha-256
+      - LISTEN_PORT=6432
+      - LOG_CONNECTIONS=0
+      - LOG_DISCONNECTIONS=0
+      - LOG_STATS=1
+    ports:
+      - "${PGBOUNCER_HOST}:${PGBOUNCER_PORT}:6432"
+    networks:
+      - isg-network
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z pgbouncer 6432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  isg-node-main:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: isg-pro:latest
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    environment:
+      - ICONIK_APP_ID=${ICONIK_APP_ID}
+      - ICONIK_AUTH_TOKEN=${ICONIK_AUTH_TOKEN}
+      - ICONIK_URL=${ICONIK_URL}
+      - ICONIK_STORAGE_GATEWAY_ID=${ICONIK_STORAGE_GATEWAY_ID}
+    networks:
+      - isg-network
+    restart: unless-stopped
+    container_name: isg-node-main
+    volumes:
+      - ./config.ini.template:/config.ini.template:ro
+      - ${NAS_STORAGE_PATH}:/mnt/storage
+
+networks:
+  isg-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

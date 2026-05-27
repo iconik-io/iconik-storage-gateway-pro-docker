@@ -1,1 +1,144 @@
-# iconik-storage-gateway-pro-docker
+# ISG Cluster setup via docker
+
+## Overview
+
+The repository contains tools to help with a simple ISG Cluster deployment.
+
+There are two docker compose files:
+- `docker-compose.yml` - runs a single ISG Pro node together with the network database services (postgres + pgbouncer).
+- `docker-compose.database.yml` - runs only the network database services (postgres + pgbouncer).
+
+Follow this README from top to bottom.
+
+## Prerequisites
+
+- Docker Engine and Docker Compose v2 installed on the host.
+- An iconik account with permission to administer ISG clusters.
+- Windows is currently not supported.
+
+The compose files pin specific image versions (`postgres:18.4`, `edoburu/pgbouncer:v1.25.1-p0`) so rebuilds stay deterministic. To upgrade postgres across major versions (e.g. 18 → 19), follow the official `pg_upgrade` procedure - bumping the tag alone will leave the new server unable to start against an old data volume.
+
+## Security warnings
+
+- **Change all default values before running in production.** In particular, replace both `POSTGRES_PASSWORD` (the postgres superuser, used only for init/admin) and `ISG_DB_PASSWORD` (the application user, used by every ISG node for runtime queries) from `.env.example` with strong passwords.
+- **Do not expose pgbouncer to the public internet without a firewall.** `PGBOUNCER_HOST=0.0.0.0` will publish it on every interface - only do that behind a firewall.
+
+### Database accounts
+
+Two distinct database accounts are used, with different roles:
+
+- **`postgres` (superuser, `POSTGRES_PASSWORD`)** - created automatically by the postgres image at first start. Used only by `init-db.sh` to create the application user.
+- **`ISG_DB_USER` (application user, `ISG_DB_PASSWORD`)** - created by `init-db.sh` and made the owner of `POSTGRES_DB` and its `public` schema.
+
+`init-db.sh` runs **only the first time** the postgres data volume is initialized. Changing `ISG_DB_USER` or `ISG_DB_PASSWORD` in `.env` after that and restarting will not update the database — postgres skips the init script when the data dir is non-empty. To apply a credential change, either run `ALTER ROLE` manually inside the postgres container, or destroy the volume and start fresh (see "Tear down and reset" below).
+
+## Create the ISG cluster in iconik
+
+Before starting the containers, create an ISG cluster at https://app.iconik.io/admin/isg/ and note the main node id - you'll put that into `.env` as `ICONIK_STORAGE_GATEWAY_ID`.
+
+## Environment file
+
+Copy the example:
+`cp .env.example .env`
+
+and populate `.env` with real values. Example:
+```
+POSTGRES_PASSWORD=my_strong_superuser_password
+POSTGRES_DB=isg_db
+
+ISG_DB_USER=isg
+ISG_DB_PASSWORD=my_strong_app_password
+
+PGBOUNCER_HOST=0.0.0.0
+PGBOUNCER_PORT=6432
+
+NAS_STORAGE_PATH=/Volumes/my_network_storage
+
+ICONIK_APP_ID=9905c5be-268e-11e7-b1c7-6c4008b85488
+ICONIK_AUTH_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ICONIK_URL=https://app.iconik.io/
+ICONIK_STORAGE_GATEWAY_ID=05bf723c-272c-11f1-adfe-5aad1d0b1af7
+```
+
+What each variable does:
+- `POSTGRES_PASSWORD` - password for the `postgres` superuser. Used only by `init-db.sh` to bootstrap the application user.
+- `POSTGRES_DB` - name of the application database.
+- `ISG_DB_USER` / `ISG_DB_PASSWORD` - credentials for the dedicated application database user. This is the account every ISG node (and pgbouncer) uses for runtime queries.
+- `PGBOUNCER_HOST` / `PGBOUNCER_PORT` - host interface and port on which pgbouncer is published. This is the address other ISG cluster nodes (running elsewhere) connect to.
+- `NAS_STORAGE_PATH` - host path bind-mounted to `/mnt/storage` inside the ISG container; this is where iconik will read and write media files.
+- `ICONIK_*` - credentials and identifiers for the iconik tenant and the cluster you created in the step above.
+
+## Config.ini template
+
+Edit `config.ini.template` directly to customize ISG node settings. The file is bind-mounted into the container and rendered into the actual `config.ini` at start time, with env vars from `.env` substituted by `envsubst`. For the full list of available knobs, see https://help.iconik.backlight.co/hc/en-us/articles/25304290297239-ISG-Advanced-Options.
+
+If a required env var (e.g. `ICONIK_AUTH_TOKEN`) is missing from `.env`, `envsubst` will render an empty value and ISG will fail to start - check the container logs to spot this.
+
+To apply template changes without rebuilding the image:
+
+`docker compose restart isg-node-main`
+
+## Docker compose (ISG node + database)
+
+Start the ISG cluster node together with the database and connection pooler:
+
+`docker compose --env-file .env up -d`
+
+The image is built automatically on first `up`. Edits to `.env` or `config.ini.template` do not require a rebuild — only changes to the `Dockerfile` do. A normal rebuild is:
+
+`docker compose build`
+
+Use `--no-cache` only when you need to force every layer to be re-fetched (for example, to pick up a new upstream package version):
+
+`docker compose build --no-cache`
+
+Verify everything is healthy:
+
+```
+docker compose ps
+docker compose logs -f isg-node-main
+```
+
+### How the cluster pieces fit together
+
+All ISG nodes - the one running in this compose file and any additional worker nodes you add later - connect to the same network database. That database is how ISG coordinates and distributes jobs across the cluster. The main node is responsible for polling events from iconik and for handling jobs that cannot scale.
+
+Worker nodes connect to the database using a standard postgres connection string (see https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING-URIS). Example:
+
+`postgres://<ISG_DB_USER>:<ISG_DB_PASSWORD>@<main_host>:6432/<POSTGRES_DB>`
+
+Substitute the values from your `.env`. Worker nodes should connect as the `ISG_DB_USER`, never as the postgres superuser.
+
+## Docker compose (database only)
+
+`docker-compose.database.yml` runs only postgres + pgbouncer, with no ISG node. Use this when you want the database to live on its own host and install the ISG node directly on each worker machine (instead of in a container). Refer to iconik's ISG install documentation for how to set up a host-installed node.
+
+Start the database and connection pooler:
+
+`docker compose --env-file .env -f docker-compose.database.yml up -d`
+
+## Tear down and reset
+
+Stop the stack but keep the postgres data and ISG logs:
+
+`docker compose --env-file .env down`
+
+Stop and remove **everything**, including the postgres data volume:
+
+`docker compose --env-file .env down -v`
+
+The `-v` flag is destructive: after this, the next `up` will reinitialize the database from scratch, which means `init-db.sh` will run again and pick up any changes to `ISG_DB_USER` / `ISG_DB_PASSWORD` in `.env`. Existing media on the bind-mounted `NAS_STORAGE_PATH` is untouched (bind mounts are not removed by `down -v`).
+
+For the database-only stack, use the same commands with `-f docker-compose.database.yml`.
+
+## PgBouncer minimum requirements
+
+A few pgbouncer settings are dictated by how ISG operates and should not be relaxed:
+
+- `POOL_MODE=transaction` - pool mode must be at least transaction-level. Switching to session-level pooling will break the application.
+- `MAX_CLIENT_CONN=1000` - the limit must stay high. ISG can open many connections at once (this is expected to improve in future releases). When you add worker nodes, raise `MAX_CLIENT_CONN` accordingly - roughly +50 per worker is a safe starting point, though the exact number depends on worker configuration.
+- `AUTH_TYPE=scram-sha-256` - keep `AUTH_TYPE` set to a real authentication method. Do not set it to `trust`, which disables authentication entirely.
+
+## SSL support
+
+By default the connection between client and server is not encrypted. To enable SSL between ISG nodes and the database, see the PostgreSQL docs: https://www.postgresql.org/docs/current/libpq-ssl.html
