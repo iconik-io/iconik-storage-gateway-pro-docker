@@ -139,6 +139,21 @@ A few pgbouncer settings are dictated by how ISG operates and should not be rela
 - `MAX_CLIENT_CONN=1000` - the limit must stay high. ISG can open many connections at once (this is expected to improve in future releases). When you add worker nodes, raise `MAX_CLIENT_CONN` accordingly - roughly +50 per worker is a safe starting point, though the exact number depends on worker configuration.
 - `AUTH_TYPE=scram-sha-256` - keep `AUTH_TYPE` set to a real authentication method. Do not set it to `trust`, which disables authentication entirely.
 
+## Database tuning for large deployments
+
+The example compose files ship with postgres settings tuned for tables with millions of records, assuming a host with ~16GB RAM and SSD/NVMe storage for the postgres volume. Adjust to your hardware:
+
+| Host RAM | `shared_buffers` | `effective_cache_size` |
+|---|---|---|
+| 8GB | 2GB | 6GB |
+| 16GB | 4GB | 12GB |
+| 32GB | 8GB | 24GB |
+
+- If the postgres volume is on spinning disks, remove `random_page_cost`. Do not place the postgres volume on network storage.
+- If the host has many more than 8 cores, also raise `max_worker_processes` and `max_parallel_workers`.
+- `stop_grace_period: 120s` gives postgres time to finish its shutdown checkpoint. Docker's 10s default can kill it mid-checkpoint and force crash recovery on the next start.
+- Autovacuum is configured more aggressively than the postgres defaults so dead rows on large tables are cleaned up sooner. For an individual very large table, a per-table setting such as `ALTER TABLE ... SET (autovacuum_vacuum_scale_factor = 0.005)` is better than lowering the global value further.
+
 ## SSL support
 
 By default the connection between client and server is not encrypted. To enable SSL between ISG nodes and the database, see the PostgreSQL docs: https://www.postgresql.org/docs/current/libpq-ssl.html
