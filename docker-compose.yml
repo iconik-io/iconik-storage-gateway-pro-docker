@@ -3,6 +3,37 @@ services:
   postgres:
     image: postgres:18.4
     container_name: isg-postgres
+    command:
+      - postgres
+      - -c
+      - shared_buffers=4GB
+      - -c
+      - effective_cache_size=12GB
+      - -c
+      - work_mem=32MB
+      - -c
+      - maintenance_work_mem=512MB
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - autovacuum_vacuum_scale_factor=0.02
+      - -c
+      - autovacuum_analyze_scale_factor=0.01
+      - -c
+      - autovacuum_vacuum_cost_limit=2000
+      - -c
+      - max_wal_size=4GB
+      - -c
+      - checkpoint_timeout=15min
+      - -c
+      - wal_compression=lz4
+      - -c
+      - log_min_duration_statement=250
+      - -c
+      - log_autovacuum_min_duration=1s
+      - -c
+      - log_lock_waits=on
+    stop_grace_period: 120s
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
@@ -11,6 +42,10 @@ services:
       POSTGRES_INITDB_ARGS: "--lc-collate=C --lc-ctype=C --encoding=UTF8"
     volumes:
       - postgres_data:/var/lib/postgresql
+      - type: tmpfs
+        target: /dev/shm
+        tmpfs:
+          size: 1073741824
       - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
     networks:
       - isg-network
